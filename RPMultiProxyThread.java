@@ -44,7 +44,7 @@ public class RPMultiProxyThread extends Thread {
     /*
      * This function forwards the (un)modified data on to the server
      */
-    private static void RPMultiProxyForward(String outputLine) {
+    private static void RPMultiProxyForward(byte[] outBuff) {
         String inLine;
         try (
              Socket fwdSoc = new Socket("localhost", portNumber);
@@ -52,7 +52,8 @@ public class RPMultiProxyThread extends Thread {
              BufferedReader in = new BufferedReader(
                 new InputStreamReader(fwdSoc.getInputStream()));
             ) {
-              out.println(outputLine);
+              String inData = new String(outBuff, 0, outBuff.length);
+              out.println(inData);
               //We only expect to get back a 'Bye.' message
               while ((inLine = in.readLine()) != null) {
                   break;
@@ -68,21 +69,22 @@ public class RPMultiProxyThread extends Thread {
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
          ) {
             byte[] inBuff = new byte[1024]; //storage for 1KB message exchange
-            String outputLine;
-            //Instantiate new input processor object
-            ReverseProxyProtocol rpp = new ReverseProxyProtocol();
+            String outputLine = null;
             //Initialize dialog with client
-            outputLine = rpp.processInput(null);
             out.println(outputLine);
             int k = -1;
+            ReverseProxyTransformT1 t1 = new ReverseProxyTransformT1();
+            ReverseProxyTransformT2 t2 = new ReverseProxyTransformT2();
             
             while ((k = socket.getInputStream().read(inBuff, 0 , inBuff.length)) > -1) {
                 String inputStream = new String(inBuff, 0, k-2);
                 if (inputStream.equals("Bye.")) break;
-                outputLine = rpp.processInput(inputStream);
-                RPMultiProxyForward(outputLine);
-                //close client connection
-                out.println("Bye.");
+                try {
+                    RPMultiProxyForward(t2.transform(t1.transform(inBuff)));
+                    //close client connection
+                    out.println("Bye.");
+                } catch (Throwable e) {
+                }
             }
             socket.close();
         } catch (IOException e) {
