@@ -44,21 +44,19 @@ public class RPMultiProxyThread extends Thread {
     /*
      * This function forwards the (un)modified data on to the server
      */
-    private static void RPMultiProxyForward(byte[] outBuff) {
+    private static void RPMultiProxyForward(byte[] outBuff, Socket fwdSoc) {
         String inLine;
-        try (
-             Socket fwdSoc = new Socket("localhost", portNumber);
-             PrintWriter out = new PrintWriter(fwdSoc.getOutputStream(), true);
-             BufferedReader in = new BufferedReader(
-                new InputStreamReader(fwdSoc.getInputStream()));
-            ) {
-              String inData = new String(outBuff, 0, outBuff.length);
-              out.println(inData);
-              //We only expect to get back a 'Bye.' message
-              while ((inLine = in.readLine()) != null) {
-                  break;
-              }
-              fwdSoc.close();
+        try(
+            PrintWriter out = new PrintWriter(fwdSoc.getOutputStream(), true);
+            BufferedReader in = new BufferedReader(
+                             new InputStreamReader(fwdSoc.getInputStream()));
+            ){
+            String inData = new String(outBuff, 0, outBuff.length);
+            out.println(inData);
+            //We only expect to get back a 'Bye.' message
+            while ((inLine = in.readLine()) != null) {
+                break;
+            }
             } catch (IOException e) {
             } 
     }
@@ -75,18 +73,21 @@ public class RPMultiProxyThread extends Thread {
             int k = -1;
             ReverseProxyTransformT1 t1 = new ReverseProxyTransformT1();
             ReverseProxyTransformT2 t2 = new ReverseProxyTransformT2();
+            Socket fwdSoc = new Socket("localhost", portNumber);
             
             while ((k = socket.getInputStream().read(inBuff, 0 , inBuff.length)) > -1) {
-                String inputStream = new String(inBuff, 0, k-2);
+                if (k == 0) continue;
+                String inputStream = new String(inBuff);
                 if (inputStream.equals("Bye.")) break;
                 try {
-                    RPMultiProxyForward(t2.transform(t1.transform(inBuff)));
+                    RPMultiProxyForward(t2.transform(t1.transform(inBuff)), fwdSoc);
                     //close client connection
                     out.println("Bye.");
                 } catch (Throwable e) {
                 }
             }
             socket.close();
+            fwdSoc.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
